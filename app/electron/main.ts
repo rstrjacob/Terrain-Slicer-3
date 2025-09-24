@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, isAxiosError } from 'axios';
 import fs from 'fs';
 
 const PY_HOST = process.env.PY_WORKER_HOST ?? '127.0.0.1';
 const PY_PORT = Number(process.env.PY_WORKER_PORT ?? '8765');
+
+const TRANSIENT_ERROR_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT']);
 
 let quitting = false;
 
@@ -15,6 +17,12 @@ class PythonManager {
   private ready = false;
 
   private startPromise: Promise<void> | null = null;
+
+  private async restartWorker(): Promise<void> {
+    await this.stop();
+    this.startPromise = null;
+    await this.start();
+  }
 
   async start(): Promise<void> {
     if (this.ready) {
@@ -38,6 +46,7 @@ class PythonManager {
     const env = { ...process.env };
     env.FL_MISSION_APP_DATA = path.join(app.getPath('userData'), 'app_data');
     env.PYTHONPATH = [serverPath, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+    env.PYTHONUNBUFFERED = '1';
 
     const args = [path.join(serverPath, 'main.py'), '--host', PY_HOST, '--port', String(PY_PORT)];
     this.ready = false;
@@ -118,32 +127,82 @@ class PythonManager {
       await this.start();
     }
     const url = `http://${PY_HOST}:${PY_PORT}${endpoint}`;
-    try {
+    const performRequest = async () => {
       if (payload) {
         const response = await axios.post(url, payload);
         return response.data;
       }
       const response = await axios.get(url);
       return response.data;
+    };
+
+    try {
+      return await performRequest();
     } catch (error) {
-      const axiosError = error as AxiosError;
-      if (axiosError.response) {
-        const data = axiosError.response.data;
-        if (typeof data === 'string') {
-          throw new Error(data);
-        }
-        throw new Error(JSON.stringify(data));
+      if (this.shouldAttemptRecovery(error)) {
+        await this.restartWorker();
+        return performRequest();
       }
-      throw error;
+      throw this.normalizeError(error);
     }
   }
 
-  stop(): void {
-    if (this.process) {
-      this.process.kill();
-      this.process = null;
-      this.ready = false;
+  private shouldAttemptRecovery(error: unknown): boolean {
+    if (!isAxiosError(error)) {
+      return false;
     }
+    if (error.response && error.response.status >= 500) {
+      return true;
+    }
+    if (error.code && TRANSIENT_ERROR_CODES.has(error.code)) {
+      return true;
+    }
+    return false;
+  }
+
+  private normalizeError(error: unknown): Error {
+    if (!isAxiosError(error)) {
+      return error instanceof Error ? error : new Error(String(error));
+    }
+    const axiosError = error as AxiosError;
+    if (axiosError.response?.data) {
+      const data = axiosError.response.data;
+      if (typeof data === 'string') {
+        return new Error(data);
+      }
+      return new Error(JSON.stringify(data));
+    }
+    if (axiosError.code && TRANSIENT_ERROR_CODES.has(axiosError.code)) {
+      return new Error('Python worker is unavailable. Please try again.');
+    }
+    return axiosError;
+  }
+
+  async stop(): Promise<void> {
+    if (!this.process) {
+      return;
+    }
+    const proc = this.process;
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        proc.removeListener('exit', cleanup);
+        this.process = null;
+        this.ready = false;
+        resolve();
+      };
+      if (proc.exitCode !== null) {
+        cleanup();
+        return;
+      }
+      proc.once('exit', cleanup);
+      try {
+        proc.kill();
+      } catch (killError) {
+        console.error('Failed to stop Python worker', killError);
+        cleanup();
+      }
+      setTimeout(cleanup, 2000);
+    });
   }
 }
 
@@ -196,7 +255,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   quitting = true;
-  pythonManager.stop();
+  void pythonManager.stop();
 });
 
 ipcMain.handle('grid:build', async (_event, args: { cellSize: number }) => {
@@ -212,5 +271,20 @@ ipcMain.handle('open-path', async (_event, filePath: string) => {
   if (!fs.existsSync(filePath)) {
     throw new Error('File does not exist');
   }
+  const stats = fs.statSync(filePath);
+  if (stats.isDirectory()) {
+    await shell.openPath(filePath);
+    return;
+  }
   shell.showItemInFolder(filePath);
+});
+
+ipcMain.handle('examples:open', async () => {
+  const basePath = app.isPackaged
+    ? path.join(process.resourcesPath, 'examples')
+    : path.join(__dirname, '..', '..', 'examples');
+  if (!fs.existsSync(basePath)) {
+    throw new Error('Examples directory not found');
+  }
+  await shell.openPath(basePath);
 });

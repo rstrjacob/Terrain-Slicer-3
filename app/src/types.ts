@@ -42,6 +42,7 @@ export interface MissionCompileResult {
     mission_waypoints: string;
     mission_path: string;
     compile_report: string;
+    mission_directory: string;
   };
   dwell_events: { index: number; duration: number }[];
   surface_index: number | null;

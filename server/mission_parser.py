@@ -110,6 +110,7 @@ def parse_mission(text: str) -> MissionDefinition:
     speed: Optional[float] = None
     seen_crs = False
     seen_units = False
+    seen_end = False
     commands: List[MissionCommand] = []
 
     for idx, raw_line in enumerate(lines, start=1):
@@ -120,12 +121,15 @@ def parse_mission(text: str) -> MissionDefinition:
         parts = line.split()
         keyword = parts[0].upper()
 
+        if seen_end:
+            raise MissionParseError("Statements are not allowed after END", idx)
+
         if keyword == "MISSION":
             if mission_name is not None:
                 raise MissionParseError("MISSION declared multiple times", idx)
             if len(parts) < 2:
                 raise MissionParseError("MISSION must include an identifier", idx)
-            mission_name = parts[1]
+            mission_name = parts[1].upper()
             continue
 
         if keyword == "CRS":
@@ -143,9 +147,14 @@ def parse_mission(text: str) -> MissionDefinition:
             continue
 
         if keyword == "SPEED":
+            if speed is not None:
+                raise MissionParseError("SPEED declared multiple times", idx)
             if len(parts) != 3 or parts[2].lower() != "mps":
                 raise MissionParseError("SPEED must be '<value> mps'", idx)
-            speed = _parse_float(parts[1], idx)
+            value = _parse_float(parts[1], idx)
+            if value <= 0:
+                raise MissionParseError("SPEED must be greater than zero", idx)
+            speed = value
             continue
 
         if keyword == "POINT":
@@ -188,7 +197,8 @@ def parse_mission(text: str) -> MissionDefinition:
             continue
 
         if keyword == "END":
-            break
+            seen_end = True
+            continue
 
         raise MissionParseError(f"Unknown statement '{parts[0]}'", idx)
 
@@ -198,5 +208,7 @@ def parse_mission(text: str) -> MissionDefinition:
         raise MissionParseError("CRS EPSG:26917 is required", 1)
     if not seen_units:
         raise MissionParseError("UNITS M is required", 1)
+    if not seen_end:
+        raise MissionParseError("END statement is required", len(lines) or 1)
 
     return MissionDefinition(name=mission_name, speed=speed, commands=commands)

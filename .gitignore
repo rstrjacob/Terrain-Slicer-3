@@ -3,22 +3,27 @@ app/node_modules/
 app/dist/
 app/out/
 app/.vite/
+app/coverage/
+app/.eslintcache
 app/electron/tsconfig.tsbuildinfo
 
 # General TypeScript build info caches
 *.tsbuildinfo
 
-# Python
-venv/
+# Bundled Python environments
 python_env/
-__pycache__/
-*.pyc
+app/python_env/
 
-# App data caches
+# Python virtual environments & caches
+venv/
+*.pyc
+__pycache__/
+
+# Runtime mission/cache data
 app_data/*
 !app_data/.gitignore
 
-# OS
+# OS cruft
 .DS_Store
 Thumbs.db
 
@@ -26,3 +31,4 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*

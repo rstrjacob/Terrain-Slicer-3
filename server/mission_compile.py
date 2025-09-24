@@ -279,6 +279,7 @@ def compile_mission(
         "mission_waypoints": str(waypoint_path),
         "mission_path": str(path_geojson),
         "compile_report": str(report_path),
+        "mission_directory": str(mission_dir),
     }
 
     mapped_dwell = [

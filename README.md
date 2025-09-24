@@ -1,6 +1,6 @@
 # Florida Mission Planner
 
-A cross-platform Electron + React desktop application for planning and simulating custom missions across the State of Florida. The application treats Florida as a precision EPSG:26917 (metre-based) build plate, validates missions written in a custom DSL, compiles and densifies waypoints, animates traversal, and exports controller-friendly CSV/GeoJSON artifacts. Heavy geospatial workloads run inside a Python FastAPI worker to keep the UI responsive.
+A production-ready Electron + React desktop application for planning and simulating custom missions across the State of Florida. The app treats the peninsula as a precision EPSG:26917 (metre-based) build plate, validates missions written in a custom DSL, compiles and densifies waypoints, animates traversal, and exports controller-friendly CSV/GeoJSON artifacts. Heavy geospatial workloads run inside a Python FastAPI worker to keep the UI responsive.
 
 ## Repository structure
 
@@ -60,6 +60,8 @@ This command will:
 3. Launch Electron pointing at the dev server.
 
 The first run will download and cache the Florida state boundary (FDOT primary source with Census fallback) to `app_data/florida_boundary.geojson` in EPSG:26917. Subsequent runs reuse the cached boundary unless deleted.
+
+Use the **“New Mission”** button in the right-hand control pane to populate the editor with the Miami → Fort Lauderdale example mission at any time. It restores the canonical template without touching any existing exports.
 
 ## Building desktop packages
 
@@ -125,10 +127,17 @@ END
 
 A ready-to-run example lives in `examples/miami_to_ftl.mission`.
 
+### Mission templates & samples
+
+The renderer exposes two quick starts:
+
+1. **New Mission** – injects the sample mission into the Monaco editor so you can modify and compile immediately.
+2. **Open Example Folder** – available via the exports panel after the first compile; jumps straight to the generated mission directory on disk.
+
 ## UI highlights
 
 * Monaco-based mission editor with syntax highlighting for the custom DSL.
-* MapLibre GL blank canvas styled in dark mode with boundary outline, grid overlay, mission path/waypoints, and animated toolhead marker.
+* MapLibre GL blank canvas styled in dark mode with boundary outline, grid overlay, mission path/waypoints, animated toolhead marker, and a cursor lat/lon readout toggle.
 * Python-backed grid builder (10 m – 10,000 m cell slider) with caching.
 * Compile panel: validation feedback with line numbers, export shortcuts, simulation controls (play/pause/step/reset, speed multiplier, dwell handling, resurfacing marker).
 

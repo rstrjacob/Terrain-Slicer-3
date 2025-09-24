@@ -39,6 +39,7 @@ END
     exports = result.exports
     for path in exports.values():
         assert Path(path).exists()
+    assert Path(exports["mission_directory"]).is_dir()
 
 
 def test_compile_rejects_outside_boundary(_mock_boundary):

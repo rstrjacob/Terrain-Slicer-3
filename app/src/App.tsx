@@ -91,6 +91,7 @@ function App() {
   const [cursorLatLon, setCursorLatLon] = useState<[number, number] | null>(null);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const [simulation, setSimulation] = useState<SimulationState | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -237,6 +238,36 @@ function App() {
     }
   }, []);
 
+  const clearMissionLayers = useCallback(() => {
+    updateSource('mission-path', emptyCollection);
+    updateSource('mission-waypoints', emptyCollection);
+    updateSource('surface-point', emptyCollection);
+    updateSource('toolhead', emptyCollection);
+  }, [updateSource]);
+
+  const handleNewMission = useCallback(() => {
+    setMissionText(defaultMission);
+    setErrors([]);
+    setCompileResult(null);
+    setSimulation(null);
+    clearMissionLayers();
+    setStatusMessage('Loaded default mission template');
+  }, [clearMissionLayers]);
+
+  const handleOpenExamples = useCallback(() => {
+    void window.api.openExamples();
+  }, []);
+
+  const handleOpenMissionOutputs = useCallback(() => {
+    if (!compileResult) return;
+    void window.api.openPath(compileResult.exports.mission_directory);
+  }, [compileResult]);
+
+  const handleOpenGridOutputs = useCallback(() => {
+    if (!gridData) return;
+    void window.api.openPath(gridData.files.grid_geojson);
+  }, [gridData]);
+
   const fitToBoundary = useCallback((boundary: Feature) => {
     if (!mapReadyRef.current || !mapRef.current) return;
     const map = mapRef.current;
@@ -272,8 +303,12 @@ function App() {
       if (mapReadyRef.current) {
         fitToBoundary(result.boundary);
       }
+      setStatusMessage(
+        `Grid built: ${result.cells.toLocaleString()} cells at ${Math.round(result.cell_size)} m`
+      );
     } catch (error) {
       setErrors([{ message: (error as Error).message }]);
+      setStatusMessage(null);
     } finally {
       setIsBuildingGrid(false);
     }
@@ -379,6 +414,9 @@ function App() {
       } else {
         updateSource('toolhead', emptyCollection);
       }
+      setStatusMessage(
+        `Compiled ${result.mission.name} (${(result.waypoints as MissionWaypoint[]).length} densified points)`
+      );
     } catch (error) {
       const message = (error as Error).message;
       try {
@@ -393,6 +431,7 @@ function App() {
       } catch (parseError) {
         setErrors([{ message }]);
       }
+      setStatusMessage(null);
     } finally {
       setIsCompiling(false);
     }
@@ -596,6 +635,7 @@ function App() {
         <div className="panel-header">Controls</div>
         <div className="panel-body">
           <div className="controls">
+            <button onClick={handleNewMission}>New Mission Template</button>
             <label>
               Grid Cell Size (m)
               <input
@@ -610,6 +650,9 @@ function App() {
             </label>
             <button onClick={handleBuildGrid} disabled={isBuildingGrid}>
               {isBuildingGrid ? 'Building…' : 'Build Grid'}
+            </button>
+            <button onClick={handleOpenGridOutputs} disabled={!gridData}>
+              Open Grid Outputs
             </button>
             <label className="toggle-row">
               <span>Show Grid Overlay</span>
@@ -636,6 +679,8 @@ function App() {
             <button onClick={handleCompile} disabled={isCompiling}>
               {isCompiling ? 'Compiling…' : 'Compile Mission'}
             </button>
+
+            {statusMessage && <div className="status-message">{statusMessage}</div>}
 
             {compileResult && (
               <div>
@@ -684,6 +729,10 @@ function App() {
                   <button onClick={() => window.api.openPath(compileResult.exports.mission_waypoints)}>Waypoints CSV</button>
                   <button onClick={() => window.api.openPath(compileResult.exports.mission_path)}>Path GeoJSON</button>
                   <button onClick={() => window.api.openPath(compileResult.exports.compile_report)}>Compile Report</button>
+                  <button onClick={handleOpenMissionOutputs}>Mission Folder</button>
+                </div>
+                <div className="playback-controls">
+                  <button onClick={handleOpenExamples}>Example Missions</button>
                 </div>
               </div>
             )}
