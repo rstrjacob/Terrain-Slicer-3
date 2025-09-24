@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "CommonJS",
+    "moduleResolution": "node16",
     "outDir": "../dist/electron",
     "rootDir": "./",
     "strict": true,
@@ -10,7 +11,8 @@
     "types": ["node"],
     "composite": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
   "include": ["./**/*.ts"]
 }

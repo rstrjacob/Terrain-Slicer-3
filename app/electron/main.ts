@@ -4,13 +4,31 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import axios, { AxiosError } from 'axios';
 import fs from 'fs';
 
-const PY_PORT = 8765;
+const PY_HOST = process.env.PY_WORKER_HOST ?? '127.0.0.1';
+const PY_PORT = Number(process.env.PY_WORKER_PORT ?? '8765');
+
+let quitting = false;
 
 class PythonManager {
   private process: ChildProcessWithoutNullStreams | null = null;
+
   private ready = false;
 
+  private startPromise: Promise<void> | null = null;
+
   async start(): Promise<void> {
+    if (this.ready) {
+      return;
+    }
+    if (!this.startPromise) {
+      this.startPromise = this.spawnWorker().finally(() => {
+        this.startPromise = null;
+      });
+    }
+    await this.startPromise;
+  }
+
+  private async spawnWorker(): Promise<void> {
     if (this.process) {
       return;
     }
@@ -21,11 +39,12 @@ class PythonManager {
     env.FL_MISSION_APP_DATA = path.join(app.getPath('userData'), 'app_data');
     env.PYTHONPATH = [serverPath, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
 
-    const args = [path.join(serverPath, 'main.py'), '--host', '127.0.0.1', '--port', String(PY_PORT)];
+    const args = [path.join(serverPath, 'main.py'), '--host', PY_HOST, '--port', String(PY_PORT)];
+    this.ready = false;
     this.process = spawn(pythonBin, args, {
       cwd: serverPath,
       env,
-      stdio: 'pipe'
+      stdio: 'pipe',
     });
 
     this.process.stdout?.on('data', (data) => {
@@ -34,10 +53,13 @@ class PythonManager {
     this.process.stderr?.on('data', (data) => {
       console.error(`[py] ${data.toString().trim()}`);
     });
-    this.process.on('exit', (code) => {
-      console.log(`Python worker exited with code ${code}`);
+    this.process.on('exit', (code, signal) => {
+      console.log(`Python worker exited with code ${code ?? 'null'}${signal ? ` via signal ${signal}` : ''}`);
       this.ready = false;
       this.process = null;
+      if (!quitting) {
+        this.startPromise = null;
+      }
     });
 
     await this.waitForReady();
@@ -70,7 +92,7 @@ class PythonManager {
   }
 
   private async waitForReady(): Promise<void> {
-    const url = `http://127.0.0.1:${PY_PORT}/health`;
+    const url = `http://${PY_HOST}:${PY_PORT}/health`;
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
         await axios.get(url);
@@ -93,9 +115,9 @@ class PythonManager {
 
   async request(endpoint: string, payload?: Record<string, unknown>): Promise<any> {
     if (!this.ready) {
-      await this.waitForReady();
+      await this.start();
     }
-    const url = `http://127.0.0.1:${PY_PORT}${endpoint}`;
+    const url = `http://${PY_HOST}:${PY_PORT}${endpoint}`;
     try {
       if (payload) {
         const response = await axios.post(url, payload);
@@ -173,6 +195,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  quitting = true;
   pythonManager.stop();
 });
 

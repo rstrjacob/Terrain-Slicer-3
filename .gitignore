@@ -1,7 +1,12 @@
-# Node
+# Node / TypeScript artifacts
 app/node_modules/
 app/dist/
 app/out/
+app/.vite/
+app/electron/tsconfig.tsbuildinfo
+
+# General TypeScript build info caches
+*.tsbuildinfo
 
 # Python
 venv/

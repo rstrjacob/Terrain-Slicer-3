@@ -71,6 +71,20 @@ npm run build:desktop
 ```
 Artifacts are output to `app/dist/` by default. The `build:desktop` script automatically refreshes the embedded `python_env/` so installers include a fully provisioned Python worker.
 
+### Windows quick-start packaging
+
+If you only need a Windows installer and you are running on a machine without global Python tools configured, use PowerShell from the repository root:
+
+```powershell
+# Install frontend dependencies and build artefacts
+cd app
+npm ci
+npm run bundle:python
+npm run build:desktop -- --win
+```
+
+`npm ci` guarantees the install reproduces the locked dependency versions. After the build finishes, the NSIS installer and a portable ZIP live under `app/dist/`. Both bundles contain the cached Python environment and do not require a system-wide interpreter on the target computer.
+
 ### Continuous integration builds
 
 Every push or pull request triggers the `Build desktop packages` GitHub Actions workflow, which builds Windows, macOS, and Linux installers and publishes them as downloadable artifacts. Grab the installer for your platform directly from the workflow run if you don’t want to build locally.
