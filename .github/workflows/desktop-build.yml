@@ -1,0 +1,75 @@
+name: Build desktop packages
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            build-args: --win
+            python-path: python_env\Scripts\python.exe
+          - os: macos-latest
+            target: macos
+            build-args: --mac
+            python-path: python_env/bin/python3
+          - os: ubuntu-latest
+            target: linux
+            build-args: --linux
+            python-path: python_env/bin/python3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install npm dependencies
+        working-directory: app
+        run: npm install
+
+      - name: Bundle Python runtime
+        working-directory: app
+        run: npm run bundle:python
+
+      - name: Run Python tests
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          & .\${{ matrix.python-path }} -m pytest server/tests
+
+      - name: Run Python tests (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ./${{ matrix.python-path }} -m pytest server/tests
+
+      - name: Type check
+        working-directory: app
+        run: npm run typecheck
+
+      - name: Package desktop app
+        working-directory: app
+        run: npm run build:desktop -- ${{ matrix.build-args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-artifacts
+          path: app/dist
+          if-no-files-found: error
