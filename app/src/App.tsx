@@ -3,7 +3,7 @@ import Editor, { Monaco } from '@monaco-editor/react';
 import maplibregl, { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import type { Feature, FeatureCollection } from 'geojson';
+import type { Feature, FeatureCollection, Position } from 'geojson';
 import { ErrorItem, GridBuildResult, MissionCompileResult, MissionWaypoint, SimulationState } from './types';
 
 const blankStyle: maplibregl.StyleSpecification = {
@@ -242,7 +242,10 @@ function App() {
     const map = mapRef.current;
     const geometry = boundary.geometry;
     if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-      const coordinates = geometry.type === 'Polygon' ? geometry.coordinates[0] : geometry.coordinates.flat();
+      const coordinates: Position[] =
+        geometry.type === 'Polygon'
+          ? (geometry.coordinates[0] as Position[])
+          : (geometry.coordinates as Position[][][]).flat(2) as Position[];
       const lats = coordinates.map((coord) => coord[1]);
       const lons = coordinates.map((coord) => coord[0]);
       const bounds: maplibregl.LngLatBoundsLike = [
